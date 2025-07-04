@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CourtroomAI: Legal Minds</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="container">
+    <div class="scene">
+      <img id="scene-image" src="scenes/courtroom.jpg" alt="Scene"/>
+    </div>
+    <div class="conversation-log" id="conversation-log"></div>
+    <div class="player-input">
+      <input type="text" id="player-input" placeholder="Type your question or objection..."/>
+      <button id="send-btn">Send</button>
+    </div>
+    <div class="action-bar">
+      <button onclick="presentEvidence()">Present Evidence</button>
+      <button onclick="nextTurn()">Next Turn</button>
+      <button onclick="startOrResetCase()">Start/Reset Case</button>
+      <button onclick="getVerdict()">Get Verdict</button>
+    </div>
+  </div>
+  <script src="apps.js"></script>
+</body>
+</html> 

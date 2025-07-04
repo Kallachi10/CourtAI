@@ -3,11 +3,13 @@ import json
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import random
+from dotenv import load_dotenv
+load_dotenv()
 
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
-from langchain.retrievers import FAISS
+from langchain.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -22,7 +24,7 @@ class CourtroomGameEngine:
     def __init__(self):
         self.groq_client = ChatGroq(
             groq_api_key=os.getenv("GROQ_API_KEY"),
-            model_name="mixtral-8x7b-32768"
+            model_name="meta-llama/llama-4-scout-17b-16e-instruct"
         )
         
         self.vector_store_manager = VectorStoreManager()
