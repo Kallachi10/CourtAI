@@ -8,19 +8,97 @@
 </head>
 <body>
   <div class="container">
-    <div class="scene">
-      <img id="scene-image" src="scenes/courtroom.jpg" alt="Scene"/>
+    <!-- Main Menu -->
+    <div class="main-menu" id="main-menu">
+      <h1>CourtroomAI: Legal Minds</h1>
+      <p>Interactive AI-driven legal simulation game</p>
+      <button id="start-game-btn" onclick="showCaseDescription()">Start Case</button>
     </div>
-    <div class="conversation-log" id="conversation-log"></div>
-    <div class="player-input">
-      <input type="text" id="player-input" placeholder="Type your question or objection..."/>
-      <button id="send-btn">Send</button>
+
+    <!-- Case Description Page -->
+    <div class="case-description" id="case-description" style="display: none;">
+      <h1 id="case-title">The Missing Necklace</h1>
+      <div id="case-details"></div>
+      <div class="navigation-buttons">
+        <button onclick="showMainMenu()">Back to Menu</button>
+        <button onclick="showGameRules()">Proceed to Rules</button>
+      </div>
     </div>
-    <div class="action-bar">
-      <button onclick="presentEvidence()">Present Evidence</button>
-      <button onclick="nextTurn()">Next Turn</button>
-      <button onclick="startOrResetCase()">Start/Reset Case</button>
-      <button onclick="getVerdict()">Get Verdict</button>
+
+    <!-- Game Rules Page -->
+    <div class="game-rules" id="game-rules" style="display: none;">
+      <h1>Game Rules & Objectives</h1>
+      <div id="rules-content"></div>
+      <div class="navigation-buttons">
+        <button onclick="showCaseDescription()">Back to Case</button>
+        <button onclick="startGame()">Proceed to Court</button>
+      </div>
+    </div>
+
+    <!-- Game Interface -->
+    <div class="game-interface" id="game-interface" style="display: none;">
+      <!-- Game Status -->
+      <div class="game-status">
+        <div class="status-item">
+          <span>Step:</span>
+          <span id="current-step">0</span>/<span id="max-steps">8</span>
+        </div>
+        <div class="status-item">
+          <span>Score:</span>
+          <span id="player-score">0</span>
+        </div>
+        <div class="status-item">
+          <span>Target:</span>
+          <span id="target-score">80</span>
+        </div>
+      </div>
+
+      <!-- Scene -->
+      <div class="scene">
+        <img id="scene-image" src="courtroom.jpg" alt="Scene"/>
+      </div>
+
+      <!-- Conversation Log -->
+      <div class="conversation-log" id="conversation-log"></div>
+
+      <!-- Action Panel -->
+      <div class="action-panel">
+        <!-- Witness Section -->
+        <div class="witness-section">
+          <h3>Witnesses</h3>
+          <div id="witness-list"></div>
+          <div class="witness-actions" id="witness-actions" style="display: none;">
+            <input type="text" id="question-input" placeholder="Ask a question..."/>
+            <button id="ask-question-btn">Ask Question</button>
+          </div>
+        </div>
+
+        <!-- Evidence Section -->
+        <div class="evidence-section">
+          <h3>Evidence</h3>
+          <div id="evidence-list"></div>
+        </div>
+
+        <!-- Judge Chat Section -->
+        <div class="judge-chat-section">
+          <h3>Judge Chat</h3>
+          <input type="text" id="judge-chat-input" placeholder="Make a legal statement to the judge..."/>
+          <button id="judge-chat-btn">Chat with Judge</button>
+          <div class="chat-tip">Tip: Use legal terms like "reasonable doubt", "alibi", "evidence" for points!</div>
+        </div>
+      </div>
+
+      <!-- Clue Section -->
+      <div class="clue-section-standalone">
+        <h3>Clues</h3>
+        <button id="get-clue-btn" onclick="getClue()">Get Clue</button>
+        <div id="clues-discovered"></div>
+      </div>
+
+      <!-- Game Controls -->
+      <div class="game-controls">
+        <button onclick="showCaseDescription()">New Case</button>
+      </div>
     </div>
   </div>
   <script src="apps.js"></script>

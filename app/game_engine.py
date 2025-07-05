@@ -15,7 +15,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from models import (
     GameState, GamePhase, CaseData, Witness, Evidence, Clue, 
-    LegalRule, AIResponse, Verdict, ActionType
+    LegalRule, AIResponse, Verdict, ActionType, CaseObjective
 )
 from vector_store import VectorStoreManager
 from case_data import CASE_DATABASE
@@ -53,13 +53,15 @@ class CourtroomGameEngine:
             "The prosecution must prove all elements of the crime charged.",
             "Defense attorneys can cross-examine prosecution witnesses.",
             "Physical evidence must be properly authenticated before admission.",
-            "Witness credibility can be attacked through impeachment evidence."
+            "Witness credibility can be attacked through impeachment evidence.",
+            "Reasonable doubt exists when there are multiple possible explanations for the evidence.",
+            "Circumstantial evidence can be sufficient for conviction if it excludes all reasonable doubt."
         ]
         
         self.vector_store_manager.add_legal_knowledge(legal_knowledge)
     
-    def start_case(self, case_id: Optional[str] = None) -> CaseData:
-        """Start a new case or load a specific case"""
+    def start_case(self, case_id: Optional[str] = None) -> Dict[str, Any]:
+        """Start a new case with introduction and objectives"""
         if case_id is None:
             case_id = random.choice(list(CASE_DATABASE.keys()))
         
@@ -68,9 +70,9 @@ class CourtroomGameEngine:
         # Initialize game state
         self.game_state = GameState(
             case_id=case_id,
-            phase=GamePhase.OPENING,
-            current_turn=1,
-            max_turns=20,
+            phase=GamePhase.CASE_INTRO,
+            current_step=0,
+            max_steps=self.current_case.objective.max_steps,
             player_score=0.0,
             witnesses_examined=[],
             evidence_presented=[],
@@ -78,19 +80,19 @@ class CourtroomGameEngine:
             objections_raised=[],
             judge_notes=[],
             case_summary=self.current_case.description,
-            time_remaining=1200  # 20 minutes
+            time_remaining=1200,  # 20 minutes
+            current_witness=None,
+            available_actions=["call_witness", "use_evidence", "get_clue"]
         )
         
         # Add case-specific data to vector store
         self._add_case_to_vector_store()
         
-        # Generate opening statement
-        opening_statement = self._generate_opening_statement()
-        
         return {
             "case_data": self.current_case,
-            "opening_statement": opening_statement,
-            "game_state": self.game_state
+            "objective": self.current_case.objective,
+            "game_state": self.game_state,
+            "available_actions": self.game_state.available_actions
         }
     
     def _add_case_to_vector_store(self):
@@ -102,6 +104,10 @@ class CourtroomGameEngine:
             case_texts.append(f"Witness {witness.name}: {witness.role} - {witness.personality}")
             for testimony in witness.testimony:
                 case_texts.append(f"{witness.name} testimony: {testimony}")
+            for info in witness.key_information:
+                case_texts.append(f"{witness.name} key info: {info}")
+            for weakness in witness.weaknesses:
+                case_texts.append(f"{witness.name} weakness: {weakness}")
         
         # Add evidence descriptions
         for evidence in self.current_case.evidence:
@@ -113,55 +119,174 @@ class CourtroomGameEngine:
         
         self.vector_store_manager.add_case_data(case_texts, self.current_case.case_id)
     
-    def _generate_opening_statement(self) -> str:
-        """Generate an opening statement for the case"""
-        prompt = PromptTemplate(
-            input_variables=["case_title", "case_description", "charges"],
-            template="""
-            You are a judge presiding over a criminal trial. Generate a brief opening statement 
-            that introduces the case to the jury.
-            
-            Case: {case_title}
-            Description: {case_description}
-            Charges: {charges}
-            
-            Provide a neutral, professional opening statement that sets the stage for the trial.
-            """
-        )
+    def call_witness(self, witness_name: str) -> Dict[str, Any]:
+        """Call a witness to the stand"""
+        if self.game_state.current_step >= self.game_state.max_steps:
+            return {"error": "Maximum steps reached. Game over."}
         
-        formatted_prompt = prompt.format(
-            case_title=self.current_case.title,
-            case_description=self.current_case.description,
-            charges=", ".join(self.current_case.charges)
-        )
-        
-        response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
-        return response.content
-    
-    def ask_question(self, question: str, witness_name: str) -> Dict[str, Any]:
-        """Ask a question to a specific witness"""
         # Find the witness
         witness = next((w for w in self.current_case.witnesses if w.name.lower() == witness_name.lower()), None)
         if not witness:
             raise ValueError(f"Witness {witness_name} not found")
         
+        # Update game state
+        self.game_state.current_witness = witness_name
+        self.game_state.phase = GamePhase.WITNESS_EXAMINATION
+        self.game_state.current_step += 1
+        self.game_state.available_actions = ["question_witness", "use_evidence", "get_clue"]
+        
+        # Generate witness introduction
+        introduction = self._generate_witness_introduction(witness)
+        
+        # Award points and update score
+        points_earned = 5
+        self.game_state.player_score += points_earned
+        
+        return {
+            "witness": witness,
+            "introduction": introduction,
+            "game_state": self.game_state,
+            "points_earned": points_earned
+        }
+    
+    def _generate_witness_introduction(self, witness: Witness) -> str:
+        """Generate a witness introduction"""
+        prompt = PromptTemplate(
+            input_variables=["witness_name", "witness_role", "witness_personality"],
+            template="""
+            You are a court clerk introducing a witness to the stand.
+            
+            Witness: {witness_name}
+            Role: {witness_role}
+            Personality: {witness_personality}
+            
+            Provide a brief, professional introduction of the witness to the court.
+            """
+        )
+        
+        formatted_prompt = prompt.format(
+            witness_name=witness.name,
+            witness_role=witness.role,
+            witness_personality=witness.personality
+        )
+        
+        response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
+        return response.content
+    
+    def question_witness(self, question: str) -> Dict[str, Any]:
+        """Ask a question to the current witness"""
+        if not self.game_state.current_witness:
+            return {"error": "No witness on the stand. Call a witness first."}
+        
+        if self.game_state.current_step >= self.game_state.max_steps:
+            return {"error": "Maximum steps reached. Game over."}
+        
+        # Find the current witness
+        witness = next((w for w in self.current_case.witnesses if w.name.lower() == self.game_state.current_witness.lower()), None)
+        if not witness:
+            raise ValueError(f"Current witness not found")
+        
         # Retrieve relevant context
-        context = self._retrieve_relevant_context(question, witness_name)
+        context = self._retrieve_relevant_context(question, witness.name)
         
         # Generate witness response
         response = self._generate_witness_response(question, witness, context)
         
         # Update game state
-        if witness_name not in self.game_state.witnesses_examined:
-            self.game_state.witnesses_examined.append(witness_name)
+        if witness.name not in self.game_state.witnesses_examined:
+            self.game_state.witnesses_examined.append(witness.name)
         
-        self.game_state.current_turn += 1
+        self.game_state.current_step += 1
+        
+        # Award points based on question quality
+        points_earned = self._calculate_question_points(question, response, context)
+        self.game_state.player_score += points_earned
         
         return {
             "witness_response": response,
             "witness_credibility": witness.credibility,
             "clues_revealed": response.reveals_clue,
-            "clue_id": response.clue_id
+            "clue_id": response.clue_id,
+            "points_earned": points_earned,
+            "game_state": self.game_state
+        }
+    
+    def _calculate_question_points(self, question: str, response: AIResponse, context: Dict[str, Any]) -> int:
+        """Calculate points earned for a good question"""
+        points = 5  # Base points for asking a question
+        
+        # Bonus for strategic questions
+        if any(keyword in question.lower() for keyword in ["alibi", "timeline", "opportunity", "reasonable doubt"]):
+            points += 10
+        
+        # Bonus for questions that reveal clues
+        if response.reveals_clue:
+            points += 15
+        
+        # Bonus for questions that challenge witness credibility
+        if any(weakness in question.lower() for weakness in context.get("witness_info", {}).get("weaknesses", [])):
+            points += 10
+        
+        return points
+    
+    def use_evidence(self, evidence_id: str) -> Dict[str, Any]:
+        """Present evidence to the court"""
+        if self.game_state.current_step >= self.game_state.max_steps:
+            return {"error": "Maximum steps reached. Game over."}
+        
+        # Find the evidence
+        evidence = next((e for e in self.current_case.evidence if e.id == evidence_id), None)
+        if not evidence:
+            raise ValueError(f"Evidence {evidence_id} not found")
+        
+        if evidence.presented:
+            return {"error": "Evidence already presented"}
+        
+        # Update game state
+        evidence.presented = True
+        self.game_state.evidence_presented.append(evidence_id)
+        self.game_state.current_step += 1
+        
+        # Generate judge's response
+        judge_response = self._generate_judge_response(evidence)
+        
+        # Award points and update score
+        points_earned = evidence.points_value
+        self.game_state.player_score += points_earned
+        
+        return {
+            "evidence": evidence,
+            "judge_response": judge_response,
+            "points_earned": points_earned,
+            "game_state": self.game_state
+        }
+    
+    def get_clue(self) -> Dict[str, Any]:
+        """Get a hint/clue to help the player"""
+        if self.game_state.current_step >= self.game_state.max_steps:
+            return {"error": "Maximum steps reached. Game over."}
+        
+        # Find undiscovered clues
+        undiscovered_clues = [c for c in self.current_case.clues if not c.discovered]
+        if not undiscovered_clues:
+            return {"error": "No more clues available"}
+        
+        # Select the most relevant undiscovered clue
+        clue = max(undiscovered_clues, key=lambda c: c.relevance_score)
+        clue.discovered = True
+        
+        # Update game state
+        self.game_state.clues_discovered.append(clue.id)
+        self.game_state.current_step += 1
+        
+        # Award points and update score
+        points_earned = clue.points_value
+        self.game_state.player_score += points_earned
+        
+        return {
+            "clue": clue,
+            "points_earned": points_earned,
+            "game_state": self.game_state
         }
     
     def _retrieve_relevant_context(self, question: str, witness_name: str) -> Dict[str, Any]:
@@ -190,27 +315,29 @@ class CourtroomGameEngine:
                 "personality": witness.personality,
                 "credibility": witness.credibility,
                 "is_hostile": witness.is_hostile,
-                "testimony": witness.testimony
+                "testimony": witness.testimony,
+                "key_information": witness.key_information,
+                "weaknesses": witness.weaknesses
             }
         return {}
     
     def _generate_witness_response(self, question: str, witness: Witness, context: Dict[str, Any]) -> AIResponse:
         """Generate a realistic witness response using AI"""
         prompt = PromptTemplate(
-            input_variables=["witness_name", "witness_role", "witness_personality", "question", "legal_context", "case_context"],
+            input_variables=["witness_name", "witness_role", "witness_personality", "witness_testimony", "question", "legal_context", "case_context"],
             template="""
-            You are {witness_name}, a {witness_role} in a criminal trial. Your personality is: {witness_personality}
+            You are {witness_name}, a witness in a criminal trial.
             
-            The player asks: "{question}"
+            Your role: {witness_role}
+            Your personality: {witness_personality}
+            Your testimony: {witness_testimony}
+            
+            Question from the attorney: {question}
             
             Legal context: {legal_context}
             Case context: {case_context}
             
-            Respond as the witness would naturally speak. Be consistent with your personality and role.
-            Don't reveal everything at once - be realistic about what you would know and say.
-            If you reveal a clue, mention it naturally in your response.
-            
-            Respond in first person as the witness:
+            Respond as this witness would, considering their personality and role. Be realistic and consistent with their testimony. If the question reveals important information that could help the case, indicate this subtly.
             """
         )
         
@@ -218,93 +345,75 @@ class CourtroomGameEngine:
             witness_name=witness.name,
             witness_role=witness.role,
             witness_personality=witness.personality,
+            witness_testimony="; ".join(witness.testimony),
             question=question,
-            legal_context="\n".join(context["legal_rules"]),
-            case_context="\n".join(context["case_context"])
+            legal_context=str(context.get("legal_rules", [])),
+            case_context=str(context.get("case_context", []))
         )
         
         response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
         
-        # Determine if a clue is revealed
-        reveals_clue = random.random() < 0.3  # 30% chance
-        clue_id = None
-        if reveals_clue and self.current_case.clues:
-            undiscovered_clues = [c for c in self.current_case.clues if not c.discovered]
-            if undiscovered_clues:
-                clue = random.choice(undiscovered_clues)
-                clue.discovered = True
-                clue_id = clue.id
-                self.game_state.clues_discovered.append(clue_id)
+        # Check if response reveals a clue
+        clue_revealed = self._check_clue_revelation(question, response.content)
         
         return AIResponse(
             speaker=witness.name,
             content=response.content,
             emotion=self._determine_emotion(witness.personality),
             confidence=witness.credibility,
-            reveals_clue=reveals_clue,
-            clue_id=clue_id
+            reveals_clue=clue_revealed["reveals"],
+            clue_id=clue_revealed["clue_id"],
+            points_awarded=10 if clue_revealed["reveals"] else 5
         )
     
+    def _check_clue_revelation(self, question: str, response: str) -> Dict[str, Any]:
+        """Check if the response reveals a clue"""
+        # Simple keyword-based clue detection
+        clue_keywords = {
+            "C1": ["unlocked", "kitchen door", "access"],
+            "C2": ["thompson", "hurrying", "8:55", "bag"],
+            "C3": ["glove", "size 9", "size 11", "hand size"],
+            "C4": ["security guard", "away", "10 minutes", "post"]
+        }
+        
+        for clue_id, keywords in clue_keywords.items():
+            if any(keyword.lower() in response.lower() for keyword in keywords):
+                return {"reveals": True, "clue_id": clue_id}
+        
+        return {"reveals": False, "clue_id": None}
+    
     def _determine_emotion(self, personality: str) -> str:
-        """Determine the emotional state based on personality"""
-        emotions = {
-            "nervous": ["anxious", "worried", "fearful"],
-            "confident": ["assured", "certain", "bold"],
-            "hostile": ["angry", "defensive", "aggressive"],
-            "cooperative": ["helpful", "willing", "friendly"],
-            "evasive": ["cautious", "hesitant", "unclear"]
-        }
-        
-        for trait, emotion_list in emotions.items():
-            if trait in personality.lower():
-                return random.choice(emotion_list)
-        
-        return "neutral"
+        """Determine witness emotion based on personality"""
+        if "nervous" in personality.lower():
+            return "anxious"
+        elif "confident" in personality.lower():
+            return "confident"
+        elif "defensive" in personality.lower():
+            return "defensive"
+        elif "methodical" in personality.lower():
+            return "calm"
+        else:
+            return "neutral"
     
-    def present_evidence(self, evidence_id: str, description: str) -> Dict[str, Any]:
-        """Present evidence to the court"""
-        evidence = next((e for e in self.current_case.evidence if e.id == evidence_id), None)
-        if not evidence:
-            raise ValueError(f"Evidence {evidence_id} not found")
-        
-        # Generate judge's response to evidence
-        judge_response = self._generate_judge_response(evidence, description)
-        
-        # Update game state
-        if evidence_id not in self.game_state.evidence_presented:
-            self.game_state.evidence_presented.append(evidence_id)
-            evidence.presented = True
-        
-        self.game_state.current_turn += 1
-        
-        return {
-            "judge_response": judge_response,
-            "evidence_admitted": evidence.admissibility,
-            "relevance_score": evidence.relevance
-        }
-    
-    def _generate_judge_response(self, evidence: Evidence, description: str) -> AIResponse:
-        """Generate judge's response to presented evidence"""
+    def _generate_judge_response(self, evidence: Evidence) -> AIResponse:
+        """Generate judge's response to evidence presentation"""
         prompt = PromptTemplate(
-            input_variables=["evidence_name", "evidence_description", "player_description", "admissibility"],
+            input_variables=["evidence_name", "evidence_description", "evidence_relevance"],
             template="""
-            You are a judge presiding over a criminal trial. The defense attorney is presenting evidence.
+            You are a judge presiding over a criminal trial. The defense attorney has presented evidence.
             
             Evidence: {evidence_name}
-            Evidence description: {evidence_description}
-            Attorney's presentation: {player_description}
-            Admissibility: {admissibility}
+            Description: {evidence_description}
+            Relevance: {evidence_relevance}
             
-            Respond as the judge would, considering admissibility, relevance, and proper procedure.
-            Be professional and authoritative.
+            Provide a brief response acknowledging the evidence and its admissibility. Be judicial and neutral.
             """
         )
         
         formatted_prompt = prompt.format(
             evidence_name=evidence.name,
             evidence_description=evidence.description,
-            player_description=description,
-            admissibility="Admissible" if evidence.admissibility else "Inadmissible"
+            evidence_relevance=evidence.relevance
         )
         
         response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
@@ -316,89 +425,11 @@ class CourtroomGameEngine:
             confidence=0.9
         )
     
-    def next_turn(self, action_type: str, details: Dict[str, Any]) -> Dict[str, Any]:
-        """Process the next turn in the game"""
-        if action_type == ActionType.QUESTION:
-            return self.ask_question(details["question"], details["witness_name"])
-        elif action_type == ActionType.EVIDENCE:
-            return self.present_evidence(details["evidence_id"], details["description"])
-        elif action_type == ActionType.OBJECTION:
-            return self._handle_objection(details)
-        elif action_type == ActionType.CLOSING:
-            return self._handle_closing_argument(details)
-        else:
-            raise ValueError(f"Unknown action type: {action_type}")
-    
-    def _handle_objection(self, details: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle player objections"""
-        objection_type = details.get("objection_type", "general")
-        reason = details.get("reason", "")
-        
-        # Generate judge's ruling on objection
-        prompt = PromptTemplate(
-            input_variables=["objection_type", "reason"],
-            template="""
-            You are a judge ruling on an objection in a criminal trial.
-            
-            Objection type: {objection_type}
-            Attorney's reason: {reason}
-            
-            Provide a brief ruling on the objection. Be decisive and cite relevant legal principles.
-            """
-        )
-        
-        formatted_prompt = prompt.format(
-            objection_type=objection_type,
-            reason=reason
-        )
-        
-        response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
-        
-        # Update game state
-        self.game_state.objections_raised.append(f"{objection_type}: {reason}")
-        self.game_state.current_turn += 1
-        
-        return {
-            "judge_ruling": response.content,
-            "objection_sustained": "sustained" in response.content.lower()
-        }
-    
-    def _handle_closing_argument(self, details: Dict[str, Any]) -> Dict[str, Any]:
-        """Handle player's closing argument"""
-        argument = details.get("argument", "")
-        
-        # Generate judge's response to closing argument
-        prompt = PromptTemplate(
-            input_variables=["argument", "case_summary"],
-            template="""
-            You are a judge listening to closing arguments in a criminal trial.
-            
-            Attorney's closing argument: {argument}
-            Case summary: {case_summary}
-            
-            Provide a brief response acknowledging the closing argument and setting up for deliberation.
-            """
-        )
-        
-        formatted_prompt = prompt.format(
-            argument=argument,
-            case_summary=self.game_state.case_summary
-        )
-        
-        response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
-        
-        # Move to verdict phase
-        self.game_state.phase = GamePhase.VERDICT
-        
-        return {
-            "judge_response": response.content,
-            "phase": "verdict"
-        }
-    
     def get_verdict(self) -> Verdict:
         """Generate the final verdict"""
-        if self.game_state.phase != GamePhase.VERDICT:
-            raise ValueError("Case must be in verdict phase to get verdict")
+        if self.game_state.current_step < self.game_state.max_steps:
+            # If game hasn't reached max steps, force it to end
+            self.game_state.current_step = self.game_state.max_steps
         
         # Calculate evidence weight and witness credibility
         evidence_weight = {}
@@ -412,9 +443,12 @@ class CourtroomGameEngine:
             if witness.name in self.game_state.witnesses_examined:
                 witness_credibility[witness.name] = witness.credibility
         
+        # Check win conditions
+        won_case = self._check_win_conditions()
+        
         # Generate verdict reasoning
         prompt = PromptTemplate(
-            input_variables=["case_summary", "evidence_weight", "witness_credibility", "clues_discovered"],
+            input_variables=["case_summary", "evidence_weight", "witness_credibility", "clues_discovered", "player_score", "won_case"],
             template="""
             You are a judge delivering a verdict in a criminal trial.
             
@@ -422,8 +456,10 @@ class CourtroomGameEngine:
             Evidence presented: {evidence_weight}
             Witness credibility: {witness_credibility}
             Clues discovered: {clues_discovered}
+            Player performance score: {player_score}
+            Defense won: {won_case}
             
-            Based on the evidence and testimony, deliver a reasoned verdict (guilty or not guilty)
+            Based on the evidence and the defense attorney's performance, deliver a reasoned verdict (guilty or not guilty)
             with detailed reasoning. Consider the burden of proof and reasonable doubt.
             """
         )
@@ -432,16 +468,15 @@ class CourtroomGameEngine:
             case_summary=self.game_state.case_summary,
             evidence_weight=str(evidence_weight),
             witness_credibility=str(witness_credibility),
-            clues_discovered=str(self.game_state.clues_discovered)
+            clues_discovered=str(self.game_state.clues_discovered),
+            player_score=self.game_state.player_score,
+            won_case=won_case
         )
         
         response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
         
-        # Determine guilty verdict (simplified logic)
-        guilty = len(self.game_state.evidence_presented) > 3 and len(self.game_state.clues_discovered) > 2
-        
-        # Calculate player performance score
-        performance_score = self._calculate_performance_score()
+        # Determine guilty verdict based on win conditions
+        guilty = not won_case
         
         return Verdict(
             guilty=guilty,
@@ -454,24 +489,31 @@ class CourtroomGameEngine:
                 "clues_discovered": len(self.game_state.clues_discovered),
                 "objections_raised": len(self.game_state.objections_raised)
             },
-            score=performance_score
+            score=self.game_state.player_score,
+            won_case=won_case
         )
     
-    def _calculate_performance_score(self) -> float:
-        """Calculate player performance score"""
-        score = 0.0
+    def _check_win_conditions(self) -> bool:
+        """Check if the player meets all win conditions"""
+        objective = self.current_case.objective
         
-        # Base score for actions taken
-        score += len(self.game_state.evidence_presented) * 10
-        score += len(self.game_state.witnesses_examined) * 15
-        score += len(self.game_state.clues_discovered) * 20
-        score += len(self.game_state.objections_raised) * 5
+        # Check score requirement
+        if self.game_state.player_score < objective.target_score:
+            return False
         
-        # Bonus for efficiency (fewer turns used)
-        efficiency_bonus = max(0, (self.game_state.max_turns - self.game_state.current_turn) * 2)
-        score += efficiency_bonus
+        # Check clues discovered
+        if len(self.game_state.clues_discovered) < 3:
+            return False
         
-        return min(100.0, score)
+        # Check evidence presented
+        if len(self.game_state.evidence_presented) < 2:
+            return False
+        
+        # Check witnesses examined
+        if len(self.game_state.witnesses_examined) < 2:
+            return False
+        
+        return True
     
     def get_game_state(self) -> GameState:
         """Get current game state"""
@@ -479,18 +521,7 @@ class CourtroomGameEngine:
     
     def get_available_actions(self) -> List[str]:
         """Get available actions for the current turn"""
-        actions = []
-        
-        if self.game_state.phase == GamePhase.OPENING:
-            actions.extend(["examine_witness", "present_evidence"])
-        elif self.game_state.phase == GamePhase.WITNESS_EXAMINATION:
-            actions.extend(["ask_question", "present_evidence", "raise_objection"])
-        elif self.game_state.phase == GamePhase.CROSS_EXAMINATION:
-            actions.extend(["cross_examine", "present_evidence", "raise_objection"])
-        elif self.game_state.phase == GamePhase.CLOSING:
-            actions.append("closing_argument")
-        
-        return actions
+        return self.game_state.available_actions
     
     def get_case_summary(self) -> Dict[str, Any]:
         """Get a summary of the current case"""
@@ -502,8 +533,96 @@ class CourtroomGameEngine:
             "title": self.current_case.title,
             "description": self.current_case.description,
             "charges": self.current_case.charges,
+            "objective": self.current_case.objective,
             "witnesses": [w.name for w in self.current_case.witnesses],
             "evidence": [e.name for e in self.current_case.evidence],
             "clues": [c.description for c in self.current_case.clues if c.discovered],
             "game_state": self.game_state.dict()
-        } 
+        }
+    
+    def chat_with_judge(self, statement: str) -> Dict[str, Any]:
+        """Chat directly with the judge for legal advice and points"""
+        if self.game_state.current_step >= self.game_state.max_steps:
+            return {"error": "Maximum steps reached. Game over."}
+        
+        # Generate judge's response and evaluate statement
+        judge_response = self._generate_judge_chat_response(statement)
+        
+        # Calculate points for valid legal statements
+        points_earned = self._evaluate_legal_statement(statement)
+        
+        # Update game state
+        self.game_state.current_step += 1
+        self.game_state.player_score += points_earned
+        
+        return {
+            "judge_response": judge_response,
+            "points_earned": points_earned,
+            "game_state": self.game_state
+        }
+    
+    def _generate_judge_chat_response(self, statement: str) -> AIResponse:
+        """Generate judge's response to legal statements"""
+        prompt = PromptTemplate(
+            input_variables=["statement", "case_context"],
+            template="""
+            You are a judge in a criminal trial. A defense attorney is making a legal statement to you.
+            
+            Attorney's statement: {statement}
+            Case context: {case_context}
+            
+            Provide a brief, judicial response. Be authoritative but helpful. If the statement shows good legal understanding, acknowledge it. If it's incorrect, gently correct it.
+            """
+        )
+        
+        formatted_prompt = prompt.format(
+            statement=statement,
+            case_context=self.game_state.case_summary
+        )
+        
+        response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
+        
+        return AIResponse(
+            speaker="Judge",
+            content=response.content,
+            emotion="authoritative",
+            confidence=0.9
+        )
+    
+    def _evaluate_legal_statement(self, statement: str) -> int:
+        """Evaluate legal statement and award points"""
+        points = 0
+        
+        # Legal keywords that indicate good understanding
+        legal_keywords = [
+            "reasonable doubt", "burden of proof", "alibi", "evidence", 
+            "witness credibility", "circumstantial evidence", "opportunity",
+            "motive", "timeline", "objection", "hearsay", "admissible",
+            "cross-examination", "direct examination", "impeachment"
+        ]
+        
+        # Case-specific keywords
+        case_keywords = [
+            "carlos rivera", "necklace", "theft", "gala", "kitchen",
+            "security footage", "glove", "thompson", "unlocked door"
+        ]
+        
+        # Award points for legal knowledge
+        for keyword in legal_keywords:
+            if keyword.lower() in statement.lower():
+                points += 5
+        
+        # Award points for case-specific knowledge
+        for keyword in case_keywords:
+            if keyword.lower() in statement.lower():
+                points += 3
+        
+        # Bonus for strategic thinking
+        if any(phrase in statement.lower() for phrase in [
+            "reasonable doubt", "prove innocence", "alternative suspect",
+            "lack of evidence", "timeline inconsistency"
+        ]):
+            points += 10
+        
+        # Cap points to prevent abuse
+        return min(points, 25) 

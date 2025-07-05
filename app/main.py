@@ -31,70 +31,122 @@ game_engine = CourtroomGameEngine()
 class StartCaseRequest(BaseModel):
     case_id: Optional[str] = None
 
-class AskQuestionRequest(BaseModel):
-    question: str
+class CallWitnessRequest(BaseModel):
     witness_name: str
 
-class PresentEvidenceRequest(BaseModel):
-    evidence_id: str
-    description: str
+class QuestionWitnessRequest(BaseModel):
+    question: str
 
-class NextTurnRequest(BaseModel):
-    action_type: str  # "question", "evidence", "objection", "closing"
-    details: Dict[str, Any]
+class UseEvidenceRequest(BaseModel):
+    evidence_id: str
+
+class GetClueRequest(BaseModel):
+    pass
+
+class JudgeChatRequest(BaseModel):
+    statement: str
 
 @app.post("/start_case", response_model=GameResponse)
 async def start_case(request: StartCaseRequest):
-    """Start a new case or load a specific case"""
+    """Start a new case with introduction and objectives"""
     try:
         case_data = game_engine.start_case(request.case_id)
         return GameResponse(
             success=True,
             message="Case started successfully",
             data=case_data,
-            game_state=game_engine.get_game_state()
+            game_state=game_engine.get_game_state(),
+            points_earned=0
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/ask_question", response_model=GameResponse)
-async def ask_question(request: AskQuestionRequest):
-    """Ask a question to a specific witness"""
+@app.post("/call_witness", response_model=GameResponse)
+async def call_witness(request: CallWitnessRequest):
+    """Call a witness to the stand"""
     try:
-        response = game_engine.ask_question(request.question, request.witness_name)
+        response = game_engine.call_witness(request.witness_name)
+        if "error" in response:
+            raise HTTPException(status_code=400, detail=response["error"])
+        
+        return GameResponse(
+            success=True,
+            message=f"Witness {request.witness_name} called to the stand",
+            data=response,
+            game_state=game_engine.get_game_state(),
+            points_earned=response.get("points_earned", 0)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/question_witness", response_model=GameResponse)
+async def question_witness(request: QuestionWitnessRequest):
+    """Ask a question to the current witness"""
+    try:
+        response = game_engine.question_witness(request.question)
+        if "error" in response:
+            raise HTTPException(status_code=400, detail=response["error"])
+        
         return GameResponse(
             success=True,
             message="Question processed",
             data=response,
-            game_state=game_engine.get_game_state()
+            game_state=game_engine.get_game_state(),
+            points_earned=response.get("points_earned", 0)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/present_evidence", response_model=GameResponse)
-async def present_evidence(request: PresentEvidenceRequest):
+@app.post("/use_evidence", response_model=GameResponse)
+async def use_evidence(request: UseEvidenceRequest):
     """Present evidence to the court"""
     try:
-        response = game_engine.present_evidence(request.evidence_id, request.description)
+        response = game_engine.use_evidence(request.evidence_id)
+        if "error" in response:
+            raise HTTPException(status_code=400, detail=response["error"])
+        
         return GameResponse(
             success=True,
             message="Evidence presented",
             data=response,
-            game_state=game_engine.get_game_state()
+            game_state=game_engine.get_game_state(),
+            points_earned=response.get("points_earned", 0)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/next_turn", response_model=GameResponse)
-async def next_turn(request: NextTurnRequest):
-    """Process the next turn in the game"""
+@app.post("/get_clue", response_model=GameResponse)
+async def get_clue(request: GetClueRequest):
+    """Get a hint/clue to help the player"""
     try:
-        response = game_engine.next_turn(request.action_type, request.details)
+        response = game_engine.get_clue()
+        if "error" in response:
+            raise HTTPException(status_code=400, detail=response["error"])
+        
         return GameResponse(
             success=True,
-            message="Turn processed",
+            message="Clue revealed",
             data=response,
-            game_state=game_engine.get_game_state()
+            game_state=game_engine.get_game_state(),
+            points_earned=response.get("points_earned", 0)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/judge_chat", response_model=GameResponse)
+async def judge_chat(request: JudgeChatRequest):
+    """Chat directly with the judge for legal advice and points"""
+    try:
+        response = game_engine.chat_with_judge(request.statement)
+        if "error" in response:
+            raise HTTPException(status_code=400, detail=response["error"])
+        
+        return GameResponse(
+            success=True,
+            message="Judge responded",
+            data=response,
+            game_state=game_engine.get_game_state(),
+            points_earned=response.get("points_earned", 0)
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -108,7 +160,8 @@ async def get_verdict():
             success=True,
             message="Verdict delivered",
             data=verdict,
-            game_state=game_engine.get_game_state()
+            game_state=game_engine.get_game_state(),
+            points_earned=0
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -133,6 +186,44 @@ async def get_case_summary():
     try:
         summary = game_engine.get_case_summary()
         return summary
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/witnesses")
+async def get_witnesses():
+    """Get list of available witnesses"""
+    try:
+        case_data = game_engine.get_case_summary()
+        if "error" in case_data:
+            raise HTTPException(status_code=400, detail=case_data["error"])
+        
+        return {"witnesses": case_data.get("witnesses", [])}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/evidence")
+async def get_evidence():
+    """Get list of available evidence"""
+    try:
+        case_data = game_engine.get_case_summary()
+        if "error" in case_data:
+            raise HTTPException(status_code=400, detail=case_data["error"])
+        
+        # Get detailed evidence information
+        current_case = game_engine.current_case
+        if current_case:
+            evidence_list = []
+            for evidence in current_case.evidence:
+                evidence_list.append({
+                    "id": evidence.id,
+                    "name": evidence.name,
+                    "description": evidence.description,
+                    "presented": evidence.presented,
+                    "points_value": evidence.points_value
+                })
+            return {"evidence": evidence_list}
+        
+        return {"evidence": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
