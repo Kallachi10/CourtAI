@@ -1,126 +1,93 @@
 # CourtroomAI: Legal Minds
 
-An interactive AI-driven legal simulation game where players act as defense attorneys in criminal trials.
+An interactive AI-driven legal simulation game where you play as a defense attorney.
 
-## Game Overview
+## Features
 
-CourtroomAI: Legal Minds is a structured, step-limited courtroom simulation game that teaches legal procedures while providing an engaging AI-powered experience.
+### New UI Layout (Updated)
+- **Main Chat Area**: Displays the current speaker's image and response in a prominent box
+- **Speaker Display**: Shows the current speaker's image and their response text
+- **Dropdown Sections**: All game elements are organized in collapsible dropdown sections:
+  - **Chat History**: Complete conversation log
+  - **Witnesses**: Available witnesses and questioning interface
+  - **Evidence**: Evidence items that can be presented
+  - **Chat to Judge**: Legal statements and judge communication
+  - **Clues**: Discovered clues and clue discovery button
 
-### Game Features
+### Game Mechanics
+- **Interactive Courtroom**: Real-time conversation with AI-powered witnesses and judge
+- **Evidence System**: Present relevant evidence to build your case
+- **Witness Examination**: Question witnesses to uncover the truth
+- **Scoring System**: Earn points through strategic legal actions
+- **Clue Discovery**: Uncover hidden clues to strengthen your defense
 
-- **Case Introduction**: Clear case description, lawyer tasks, and game rules
-- **Witness Examination**: Call witnesses and ask strategic questions
-- **Evidence Presentation**: Present evidence to support your case
-- **Clue System**: Discover hidden clues to strengthen your defense
-- **Step-Limited Gameplay**: Complete your case within a limited number of actions
-- **Scoring System**: Earn points for good legal strategy
-- **AI-Powered Responses**: Realistic witness and judge responses using Groq LLM
+## How to Run
 
-### Current Case: "The Missing Necklace"
+1. **Install Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-You are defending Carlos Rivera, a caterer accused of stealing a $500,000 diamond necklace from a high-society gala. Your task is to create reasonable doubt and prove his innocence.
+2. **Start the Backend Server**:
+   ```bash
+   python run_server.py
+   ```
 
-## Game Structure
+3. **Open the Frontend**:
+   - Navigate to `frontend/index.html` in your web browser
+   - Or serve the frontend directory using a local server
 
-### 1. Case Introduction
-- Case description and background
-- Your specific lawyer task
-- Game rules and win conditions
-- Maximum steps allowed (12)
+## Game Flow
 
-### 2. Gameplay Actions
-- **Call Witness**: Bring witnesses to the stand
-- **Question Witness**: Ask strategic questions to reveal information
-- **Use Evidence**: Present evidence to the court
-- **Get Clue**: Receive hints to help your case
+1. **Case Introduction**: Read the case details and understand your role
+2. **Game Rules**: Review objectives and scoring system
+3. **Courtroom Session**: 
+   - Call witnesses and ask questions
+   - Present evidence to the court
+   - Make legal statements to the judge
+   - Discover clues to strengthen your case
+4. **Verdict**: Receive the final verdict based on your performance
 
-### 3. Win Conditions
+## UI Features
+
+### Speaker Display
+- Large image area showing the current speaker
+- Prominent text box displaying the speaker's response
+- Automatic updates when different characters speak
+
+### Dropdown Organization
+- **Chat History**: Click to view complete conversation log
+- **Witnesses**: Click to see available witnesses and call them to the stand
+- **Evidence**: Click to view and present evidence items
+- **Chat to Judge**: Click to make legal statements to the judge
+- **Clues**: Click to view discovered clues and get new ones
+
+### Responsive Design
+- Works on desktop and mobile devices
+- Collapsible sidebar on smaller screens
+- Touch-friendly interface
+
+## Scoring System
+
+- **Calling Witnesses**: 5 points
+- **Good Questions**: 5-25 points (based on strategy)
+- **Presenting Evidence**: 10-25 points (based on relevance)
+- **Discovering Clues**: 15-25 points (based on importance)
+- **Legal Statements**: 5-25 points (based on legal knowledge)
+
+## Win Conditions
+
 - Score at least 80 points
 - Discover at least 3 clues
 - Present at least 2 pieces of evidence
 - Question at least 2 witnesses
 
-### 4. Scoring System
-- Calling witnesses: 5 points
-- Good questions: 5-25 points (based on strategy)
-- Presenting evidence: 10-25 points (based on relevance)
-- Discovering clues: 15-25 points (based on importance)
-
-## Installation & Setup
-
-### Prerequisites
-- Python 3.8+
-- Groq API key
-
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd CourtAI
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Set up environment variables:
-Create a `.env` file in the root directory:
-```
-GROQ_API_KEY=your_groq_api_key_here
-```
-
-### Running the Game
-
-1. Start the backend server:
-```bash
-# Option 1: Using the run script (recommended)
-python run_server.py
-
-# Option 2: Using the batch file (Windows)
-run_server.bat
-
-# Option 3: Manual method
-cd app
-python main.py
-```
-
-2. Open the frontend:
-Open `frontend/index.html` in your web browser
-
-3. Start playing:
-- Click "Start Case" to begin
-- Follow the case introduction and rules
-- Use the action panels to call witnesses, present evidence, and get clues
-- Try to win the case within the step limit!
-
-## Game Controls
-
-- **Witness Section**: Click on witnesses to call them to the stand
-- **Evidence Section**: Click on evidence items to present them
-- **Clue Section**: Click "Get Clue" to receive hints
-- **Question Input**: Type questions when a witness is on the stand
-- **Game Controls**: Get verdict or start a new case
-
 ## Technical Details
 
-### Backend (Python/FastAPI)
-- **Game Engine**: Manages game state and logic
-- **AI Integration**: Uses Groq LLM for realistic responses
-- **Vector Store**: Stores legal knowledge and case context
-- **API Endpoints**: RESTful API for frontend communication
-
-### Frontend (HTML/CSS/JavaScript)
-- **Responsive Design**: Works on desktop and mobile
-- **Real-time Updates**: Live game state and conversation
-- **Interactive UI**: Click-based actions and real-time feedback
-
-### AI Features
-- **Witness Responses**: Contextual, personality-based responses
-- **Judge Rulings**: Legal reasoning for evidence and objections
-- **Verdict Generation**: Comprehensive case analysis
-- **Clue Detection**: Intelligent clue revelation based on questions
+- **Backend**: Python with FastAPI
+- **Frontend**: HTML, CSS, JavaScript
+- **AI Integration**: OpenAI GPT models for dynamic responses
+- **Real-time Updates**: Live conversation and scoring updates
 
 ## Game Strategy Tips
 

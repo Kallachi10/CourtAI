@@ -19,6 +19,11 @@ const evidenceList = document.getElementById('evidence-list');
 const cluesDiscovered = document.getElementById('clues-discovered');
 const witnessActions = document.getElementById('witness-actions');
 
+// New speaker display elements
+const speakerImage = document.getElementById('speaker-image');
+const speakerName = document.getElementById('speaker-name');
+const speakerText = document.getElementById('speaker-text');
+
 // Game status elements
 const currentStepEl = document.getElementById('current-step');
 const maxStepsEl = document.getElementById('max-steps');
@@ -29,6 +34,80 @@ const targetScoreEl = document.getElementById('target-score');
 const caseTitleEl = document.getElementById('case-title');
 const caseDetailsEl = document.getElementById('case-details');
 const rulesContentEl = document.getElementById('rules-content');
+
+// Dropdown state
+let dropdownStates = {
+  'chat-history': false,
+  'witnesses': false,
+  'evidence': false,
+  'judge-chat': false,
+  'clues': false
+};
+
+function toggleDropdown(dropdownId) {
+  const content = document.getElementById(`${dropdownId}-content`);
+  const arrow = document.getElementById(`${dropdownId}-arrow`);
+  
+  dropdownStates[dropdownId] = !dropdownStates[dropdownId];
+  
+  if (dropdownStates[dropdownId]) {
+    content.classList.add('open');
+    arrow.textContent = '▲';
+  } else {
+    content.classList.remove('open');
+    arrow.textContent = '▼';
+  }
+}
+
+function updateSpeakerDisplay(speaker, text, imageSrc = null) {
+  speakerName.textContent = speaker;
+  speakerText.textContent = text;
+  
+  if (imageSrc) {
+    // Use provided image source
+    speakerImage.src = imageSrc;
+  } else {
+    // Get appropriate image based on speaker
+    const imagePath = getSpeakerImage(speaker);
+    speakerImage.src = imagePath;
+    
+    // Handle image loading errors
+    speakerImage.onerror = function() {
+      console.warn(`Image not found: ${imagePath}, using default`);
+      this.src = 'images/courtroom.jpg';
+    };
+  }
+  
+  // Add to conversation history
+  addMessage(speaker, text);
+}
+
+function getSpeakerImage(speaker) {
+  // Map speakers to appropriate images
+  const speakerImages = {
+    // Court officials (place in frontend/images/)
+    'Judge': 'images/judge.jpg',
+    'Clerk': 'images/clerk.jpg',
+    'Bailiff': 'images/bailiff.jpg',
+    
+    // Witnesses (place in frontend/images/ or frontend/images/witnesses/)
+    'Carlos Rivera': 'images/carl.jpg',
+    'Alice Monroe': 'images/alice1.jpg',
+    'Detective Sarah Lin': 'images/detect.jpg',
+    'Mr. Thompson': 'images/thompson.jpg',
+    'Security Guard': 'images/security.jpg',
+    
+    // Player and system
+    'You': 'images/attorney.jpg',
+    'System': 'images/courtroom.jpg',
+    
+    // Default fallback
+    'default': 'images/courtroom.jpg'
+  };
+  
+  // Return the specific image for the speaker, or default
+  return speakerImages[speaker] || speakerImages['default'];
+}
 
 function setLoading(state) {
   loading = state;
@@ -218,8 +297,8 @@ function startGame() {
         loadWitnesses();
         loadEvidence();
         
-        // Add initial message
-        addMessage('Judge', 'Court is now in session. The defense may proceed.', 'success');
+        // Add initial message and update speaker display
+        updateSpeakerDisplay('Judge', 'Court is now in session. The defense may proceed.');
         
         updateGameStatus();
       } else {
@@ -290,8 +369,8 @@ function callWitness(witnessName) {
         // Show witness actions
         witnessActions.style.display = 'block';
         
-        // Add messages
-        addMessage('Clerk', data.data.introduction);
+        // Update speaker display with clerk introduction
+        updateSpeakerDisplay('Clerk', data.data.introduction);
         addMessage('Judge', `${witnessName}, you may take the stand.`, 'success');
         
         // Update score
@@ -327,9 +406,9 @@ function askQuestion() {
       if (data.success) {
         gameState = data.game_state;
         
-        // Add messages
+        // Update speaker display with witness response
+        updateSpeakerDisplay(gameState.current_witness, data.data.witness_response.content);
         addMessage('You', question);
-        addMessage(gameState.current_witness, data.data.witness_response.content);
         
         // Check for clue revelation
         if (data.data.clues_revealed) {
@@ -371,9 +450,9 @@ function useEvidence(evidenceId) {
       if (data.success) {
         gameState = data.game_state;
         
-        // Add messages
+        // Update speaker display with judge response
+        updateSpeakerDisplay('Judge', data.data.judge_response.content);
         addMessage('You', `I present evidence: ${data.data.evidence.name}`);
-        addMessage('Judge', data.data.judge_response.content);
         
         // Update evidence list
         loadEvidence();
@@ -411,9 +490,9 @@ function chatWithJudge() {
       if (data.success) {
         gameState = data.game_state;
         
-        // Add messages
+        // Update speaker display with judge response
+        updateSpeakerDisplay('Judge', data.data.judge_response.content);
         addMessage('You', statement);
-        addMessage('Judge', data.data.judge_response.content);
         
         // Update score
         if (data.points_earned > 0) {
@@ -478,6 +557,7 @@ function getClue() {
 }
 
 function checkGameEnd() {
+  // Check if game should end only after 8 steps
   if (gameState && gameState.current_step >= gameState.max_steps) {
     addMessage('Judge', 'Time is up. The court will now deliberate.', 'success');
     setTimeout(() => {
@@ -496,23 +576,26 @@ function getVerdict() {
       if (data.success) {
         const verdict = data.data;
         
-        // Add verdict message
-        addMessage('Judge', `Verdict: ${verdict.guilty ? 'GUILTY' : 'NOT GUILTY'}`, 'success');
-        addMessage('Judge', verdict.reasoning);
+        // Create comprehensive verdict text for response area
+        const verdictText = `VERDICT: ${verdict.guilty ? 'GUILTY' : 'NOT GUILTY'}
+
+${verdict.reasoning}
+
+FINAL SCORE: ${Math.round(verdict.score)} points
+
+${verdict.score >= 80 ? '🎉 CONGRATULATIONS! You WON the case!' : '❌ You did NOT win the case. Try again!'}
+
+Performance Summary:
+• Evidence Presented: ${verdict.player_performance.evidence_presented}
+• Witnesses Examined: ${verdict.player_performance.witnesses_examined}
+• Clues Discovered: ${verdict.player_performance.clues_discovered}
+• Objections Raised: ${verdict.player_performance.objections_raised}`;
+
+        // Update speaker display with verdict
+        updateSpeakerDisplay('Judge', verdictText);
         
-        // Show final score
+        // Add to conversation log
         addMessage('System', `Final Score: ${Math.round(verdict.score)} points`, 'success');
-        
-        // Show win/lose status
-        if (verdict.won_case) {
-          addMessage('System', '🎉 CONGRATULATIONS! You WON the case!', 'success');
-        } else {
-          addMessage('System', '❌ You did NOT win the case. Try again!', 'error');
-        }
-        
-        // Show performance breakdown
-        const performance = verdict.player_performance;
-        addMessage('System', `Performance: ${performance.evidence_presented} evidence, ${performance.witnesses_examined} witnesses, ${performance.clues_discovered} clues`);
         
         // Disable all game actions after verdict
         disableGameActions();

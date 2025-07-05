@@ -32,12 +32,12 @@ class CourtroomGameEngine:
         self.game_state: Optional[GameState] = None
         self.conversation_history: List[Dict[str, Any]] = []
         
-        # Initialize embeddings
+        
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         
-        # Load legal knowledge and case data into vector stores
+       
         self._initialize_vector_stores()
     
     def _initialize_vector_stores(self):
@@ -80,12 +80,12 @@ class CourtroomGameEngine:
             objections_raised=[],
             judge_notes=[],
             case_summary=self.current_case.description,
-            time_remaining=1200,  # 20 minutes
+            time_remaining=1200,  
             current_witness=None,
             available_actions=["call_witness", "use_evidence", "get_clue"]
         )
         
-        # Add case-specific data to vector store
+        
         self._add_case_to_vector_store()
         
         return {
@@ -427,6 +427,9 @@ class CourtroomGameEngine:
     
     def get_verdict(self) -> Verdict:
         """Generate the final verdict"""
+        if not self.game_state or not self.current_case:
+            raise ValueError("No active case or game state")
+            
         if self.game_state.current_step < self.game_state.max_steps:
             # If game hasn't reached max steps, force it to end
             self.game_state.current_step = self.game_state.max_steps
@@ -473,14 +476,19 @@ class CourtroomGameEngine:
             won_case=won_case
         )
         
-        response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
+        try:
+            response = self.groq_client.invoke([HumanMessage(content=formatted_prompt)])
+            reasoning = response.content
+        except Exception as e:
+            # Fallback reasoning if AI call fails
+            reasoning = f"Based on the evidence presented and the defense attorney's performance (score: {self.game_state.player_score}), the court finds the defendant {'NOT GUILTY' if won_case else 'GUILTY'}."
         
         # Determine guilty verdict based on win conditions
         guilty = not won_case
         
         return Verdict(
             guilty=guilty,
-            reasoning=response.content,
+            reasoning=reasoning,
             evidence_weight=evidence_weight,
             witness_credibility=witness_credibility,
             player_performance={

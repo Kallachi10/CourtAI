@@ -53,46 +53,86 @@
         </div>
       </div>
 
-      <!-- Scene -->
-      <div class="scene">
-        <img id="scene-image" src="courtroom.jpg" alt="Scene"/>
-      </div>
-
-      <!-- Conversation Log -->
-      <div class="conversation-log" id="conversation-log"></div>
-
-      <!-- Action Panel -->
-      <div class="action-panel">
-        <!-- Witness Section -->
-        <div class="witness-section">
-          <h3>Witnesses</h3>
-          <div id="witness-list"></div>
-          <div class="witness-actions" id="witness-actions" style="display: none;">
-            <input type="text" id="question-input" placeholder="Ask a question..."/>
-            <button id="ask-question-btn">Ask Question</button>
+      <!-- Main Courtroom Layout -->
+      <div class="courtroom-layout">
+        <!-- Main Chat Area -->
+        <div class="main-chat-area">
+          <!-- Current Speaker Display -->
+          <div class="current-speaker" id="current-speaker">
+            <div class="speaker-image-container">
+              <img id="speaker-image" src="images/courtroom.jpg" alt="Current Speaker"/>
+            </div>
+            <div class="speaker-response-container">
+              <div class="speaker-name" id="speaker-name">Courtroom</div>
+              <div class="speaker-text" id="speaker-text">Welcome to the courtroom. The case is now in session.</div>
+            </div>
           </div>
         </div>
 
-        <!-- Evidence Section -->
-        <div class="evidence-section">
-          <h3>Evidence</h3>
-          <div id="evidence-list"></div>
-        </div>
+        <!-- Right Sidebar -->
+        <div class="right-sidebar">
+          <!-- Chat History Dropdown -->
+          <div class="dropdown-section">
+            <div class="dropdown-header" onclick="toggleDropdown('chat-history')">
+              <h3>Chat History</h3>
+              <span class="dropdown-arrow" id="chat-history-arrow">▼</span>
+            </div>
+            <div class="dropdown-content" id="chat-history-content">
+              <div class="conversation-log" id="conversation-log"></div>
+            </div>
+          </div>
 
-        <!-- Judge Chat Section -->
-        <div class="judge-chat-section">
-          <h3>Judge Chat</h3>
-          <input type="text" id="judge-chat-input" placeholder="Make a legal statement to the judge..."/>
-          <button id="judge-chat-btn">Chat with Judge</button>
-          <div class="chat-tip">Tip: Use legal terms like "reasonable doubt", "alibi", "evidence" for points!</div>
-        </div>
-      </div>
+          <!-- Witnesses Dropdown -->
+          <div class="dropdown-section">
+            <div class="dropdown-header" onclick="toggleDropdown('witnesses')">
+              <h3>Witnesses</h3>
+              <span class="dropdown-arrow" id="witnesses-arrow">▼</span>
+            </div>
+            <div class="dropdown-content" id="witnesses-content">
+              <div id="witness-list"></div>
+              <div class="witness-actions" id="witness-actions" style="display: none;">
+                <input type="text" id="question-input" placeholder="Ask a question..."/>
+                <button id="ask-question-btn">Ask Question</button>
+              </div>
+            </div>
+          </div>
 
-      <!-- Clue Section -->
-      <div class="clue-section-standalone">
-        <h3>Clues</h3>
-        <button id="get-clue-btn" onclick="getClue()">Get Clue</button>
-        <div id="clues-discovered"></div>
+          <!-- Evidence Dropdown -->
+          <div class="dropdown-section">
+            <div class="dropdown-header" onclick="toggleDropdown('evidence')">
+              <h3>Evidence</h3>
+              <span class="dropdown-arrow" id="evidence-arrow">▼</span>
+            </div>
+            <div class="dropdown-content" id="evidence-content">
+              <div id="evidence-list"></div>
+            </div>
+          </div>
+
+          <!-- Judge Chat Dropdown -->
+          <div class="dropdown-section">
+            <div class="dropdown-header" onclick="toggleDropdown('judge-chat')">
+              <h3>Chat to Judge</h3>
+              <span class="dropdown-arrow" id="judge-chat-arrow">▼</span>
+            </div>
+            <div class="dropdown-content" id="judge-chat-content">
+              <input type="text" id="judge-chat-input" placeholder="Make a legal statement to the judge..."/>
+              <button id="judge-chat-btn">Chat with Judge</button>
+              <div class="chat-tip">Tip: Use legal terms like "reasonable doubt", "alibi", "evidence" for points!</div>
+            </div>
+          </div>
+
+          <!-- Clues Section -->
+          <div class="dropdown-section">
+            <div class="dropdown-header" onclick="toggleDropdown('clues')">
+              <h3>Clues</h3>
+              <span class="dropdown-arrow" id="clues-arrow">▼</span>
+            </div>
+            <div class="dropdown-content" id="clues-content">
+              <button id="get-clue-btn" onclick="getClue()">Get Clue</button>
+              <div id="clues-discovered"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Game Controls -->

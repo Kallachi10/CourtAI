@@ -159,7 +159,7 @@ async def get_verdict():
         return GameResponse(
             success=True,
             message="Verdict delivered",
-            data=verdict,
+            data=verdict.dict(),
             game_state=game_engine.get_game_state(),
             points_earned=0
         )
