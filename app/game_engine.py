@@ -9,8 +9,8 @@ load_dotenv()
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 from langchain.schema import HumanMessage, SystemMessage
-from langchain.vectorstores import FAISS
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from models import (
