@@ -2,7 +2,8 @@ setuptools>=42
 wheel
 fastapi==0.104.1
 uvicorn==0.24.0
-langchain==0.0.350
+langchain==0.1.20
+langchain-community==0.0.24
 langchain-groq==0.0.1
 faiss-cpu==1.7.4
 chromadb==0.4.18
